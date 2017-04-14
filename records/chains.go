@@ -1,6 +1,8 @@
 package records
 
 import (
+	"fmt"
+
 	"github.com/mesosphere/mesos-dns/records/labels"
 )
 
@@ -77,4 +79,10 @@ func withNamedPort(portName string, spec labels.Func, gen chain) chain {
 		}
 		gen(records...)
 	}
+}
+
+// withNumberedPort prepends a `_port{port index}.` to records
+func withNumberedPort(portIndex int, spec labels.Func, gen chain) chain {
+	portName := fmt.Sprintf("port%d", portIndex)
+	return withNamedPort(portName, spec, gen)
 }

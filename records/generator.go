@@ -99,6 +99,7 @@ type RecordGenerator struct {
 	EnumData      EnumerationData
 	httpClient    httpcli.Doer
 	stateEndpoint urls.Builder
+	numberPorts   bool
 }
 
 // EnumerableRecord is the lowest level object, and should map 1:1 with DNS records
@@ -145,6 +146,7 @@ func WithConfig(config Config) Option {
 		doer    = httpcli.New(config.MesosAuthentication, config.httpConfigMap, transport, timeout)
 	)
 	return func(rg *RecordGenerator) {
+		rg.numberPorts = config.NumberPorts
 		rg.httpClient = doer
 		rg.stateEndpoint = rg.stateEndpoint.With(
 			urls.Path("/master/state.json"),
@@ -579,10 +581,15 @@ func (rg *RecordGenerator) taskContextRecord(ctx context, task state.Task, f sta
 	}
 
 	slaveHost := canonical + ".slave" + tail
-	for _, port := range task.Ports() {
+	for index, port := range task.Ports() {
 		slaveTarget := slaveHost + ":" + port
 		recordName(withProtocol(protocolNone, fname, spec,
 			withSubdomains(subdomains, asSRV(slaveTarget))))
+
+		if rg.numberPorts {
+			recordName(withProtocol(protocolNone, fname, spec,
+				withNumberedPort(index, spec, asSRV(slaveTarget))))
+		}
 	}
 
 	if !task.HasDiscoveryInfo() {
@@ -591,6 +598,7 @@ func (rg *RecordGenerator) taskContextRecord(ctx context, task state.Task, f sta
 
 	for _, port := range task.DiscoveryInfo.Ports.DiscoveryPorts {
 		target := canonical + tail + ":" + strconv.Itoa(port.Number)
+
 		recordName(withProtocol(port.Protocol, fname, spec,
 			withNamedPort(port.Name, spec, asSRV(target))))
 	}

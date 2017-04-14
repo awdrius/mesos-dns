@@ -106,6 +106,8 @@ type Config struct {
 	httpConfigMap httpcli.ConfigMap
 
 	MesosAuthentication httpcli.AuthMechanism
+	// when generating SRV records for task with multiple ports - do we number them in case when they are not named ports
+	NumberPorts bool
 }
 
 // NewConfig return the default config of the resolver
@@ -137,6 +139,7 @@ func NewConfig() Config {
 		IPSources:           []string{"netinfo", "mesos", "host"},
 		EnumerationOn:       true,
 		MesosAuthentication: httpcli.AuthNone,
+		NumberPorts:         false,
 	}
 }
 
