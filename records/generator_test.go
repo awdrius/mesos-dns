@@ -188,7 +188,7 @@ func TestLeaderIP(t *testing.T) {
 	}
 }
 
-func testRecordGenerator(t *testing.T, spec labels.Func, ipSources []string) RecordGenerator {
+func testRecordGenerator(t *testing.T, spec labels.Func, ipSources []string, numPorts bool) RecordGenerator {
 	var sj state.State
 
 	b, err := ioutil.ReadFile("../factories/fake.json")
@@ -202,6 +202,7 @@ func testRecordGenerator(t *testing.T, spec labels.Func, ipSources []string) Rec
 	masters := []string{"144.76.157.37:5050"}
 
 	var rg RecordGenerator
+	rg.numberPorts = numPorts
 	if err := rg.InsertState(sj, "mesos", "mesos-dns.mesos.", "127.0.0.1", masters, ipSources, spec); err != nil {
 		t.Fatal(err)
 	}
@@ -211,10 +212,10 @@ func testRecordGenerator(t *testing.T, spec labels.Func, ipSources []string) Rec
 
 // ensure we are parsing what we think we are
 func TestInsertState(t *testing.T) {
-	rg := testRecordGenerator(t, labels.RFC952, []string{"docker", "mesos", "host"})
-	rgDocker := testRecordGenerator(t, labels.RFC952, []string{"docker", "host"})
-	rgMesos := testRecordGenerator(t, labels.RFC952, []string{"mesos", "host"})
-	rgSlave := testRecordGenerator(t, labels.RFC952, []string{"host"})
+	rg := testRecordGenerator(t, labels.RFC952, []string{"docker", "mesos", "host"}, false)
+	rgDocker := testRecordGenerator(t, labels.RFC952, []string{"docker", "host"}, false)
+	rgMesos := testRecordGenerator(t, labels.RFC952, []string{"mesos", "host"}, false)
+	rgSlave := testRecordGenerator(t, labels.RFC952, []string{"host"}, false)
 
 	for i, tt := range []struct {
 		rrs  rrs
@@ -262,6 +263,124 @@ func TestInsertState(t *testing.T) {
 		}},
 		{rg.SRVs, "_car-store._udp.marathon.mesos.", []string{
 			"car-store-zinaz-0.marathon.slave.mesos.:31364",
+			"car-store-zinaz-0.marathon.slave.mesos.:31365",
+		}},
+		{rg.SRVs, "_slave._tcp.mesos.", []string{"slave.mesos.:5051"}},
+		{rg.SRVs, "_framework._tcp.marathon.mesos.", []string{"marathon.mesos.:25501"}},
+
+		{rgSlave.As, "liquor-store.marathon.mesos.", []string{"1.2.3.11", "1.2.3.12"}},
+		{rgSlave.As, "liquor-store.marathon.slave.mesos.", []string{"1.2.3.11", "1.2.3.12"}},
+		{rgSlave.As, "nginx.marathon.mesos.", []string{"1.2.3.11"}},
+		{rgSlave.As, "car-store.marathon.slave.mesos.", []string{"1.2.3.11"}},
+
+		{rgMesos.As, "liquor-store.marathon.mesos.", []string{"1.2.3.11", "1.2.3.12"}},
+		{rgMesos.As, "liquor-store.marathon.slave.mesos.", []string{"1.2.3.11", "1.2.3.12"}},
+		{rgMesos.As, "nginx.marathon.mesos.", []string{"10.3.0.3"}},
+		{rgMesos.As, "car-store.marathon.slave.mesos.", []string{"1.2.3.11"}},
+
+		{rgDocker.As, "liquor-store.marathon.mesos.", []string{"10.3.0.1", "10.3.0.2"}},
+		{rgDocker.As, "liquor-store.marathon.slave.mesos.", []string{"1.2.3.11", "1.2.3.12"}},
+		{rgDocker.As, "nginx.marathon.mesos.", []string{"1.2.3.11"}},
+		{rgDocker.As, "car-store.marathon.slave.mesos.", []string{"1.2.3.11"}},
+	} {
+		// convert want into a map[string]struct{} (string set) for simpler comparison
+		// via reflect.DeepEqual
+		want := map[string]struct{}{}
+		for _, x := range tt.want {
+			want[x] = struct{}{}
+		}
+		if got := tt.rrs[tt.name]; !reflect.DeepEqual(got, want) {
+			if len(got) == 0 && len(want) == 0 {
+				continue
+			}
+			t.Errorf("test #%d: %q: got: %q, want: %q", i, tt.name, got, want)
+		}
+	}
+}
+
+// ensure we are parsing what we think we are
+func TestInsertStateNumPorts(t *testing.T) {
+	rg := testRecordGenerator(t, labels.RFC952, []string{"docker", "mesos", "host"}, true)
+	rgDocker := testRecordGenerator(t, labels.RFC952, []string{"docker", "host"}, true)
+	rgMesos := testRecordGenerator(t, labels.RFC952, []string{"mesos", "host"}, true)
+	rgSlave := testRecordGenerator(t, labels.RFC952, []string{"host"}, true)
+
+	for i, tt := range []struct {
+		rrs  rrs
+		name string
+		want []string
+	}{
+		{rg.As, "big-dog.marathon.mesos.", []string{"10.3.0.1"}},
+		{rg.As, "liquor-store.marathon.mesos.", []string{"10.3.0.1", "10.3.0.2"}},
+		{rg.As, "liquor-store.marathon.slave.mesos.", []string{"1.2.3.11", "1.2.3.12"}},
+		{rg.As, "car-store.marathon.slave.mesos.", []string{"1.2.3.11"}},
+		{rg.As, "nginx.marathon.mesos.", []string{"10.3.0.3"}},
+		{rg.As, "poseidon.marathon.mesos.", nil},
+		{rg.As, "poseidon.marathon.slave.mesos.", nil},
+		{rg.As, "master.mesos.", []string{"144.76.157.37"}},
+		{rg.As, "master0.mesos.", []string{"144.76.157.37"}},
+		{rg.As, "leader.mesos.", []string{"144.76.157.37"}},
+		{rg.As, "slave.mesos.", []string{"1.2.3.10", "1.2.3.11", "1.2.3.12"}},
+		{rg.As, "some-box.chronoswithaspaceandmixe.mesos.", []string{"1.2.3.11"}}, // ensure we translate the framework name as well
+		{rg.As, "marathon.mesos.", []string{"1.2.3.11"}},
+		{rg.SRVs, "_big-dog._tcp.marathon.mesos.", []string{
+			"big-dog-4dfjd-0.marathon.mesos.:80",
+			"big-dog-4dfjd-0.marathon.mesos.:443",
+		}},
+		{rg.SRVs, "_port0._big-dog._tcp.marathon.mesos.", []string{
+			"big-dog-4dfjd-0.marathon.mesos.:80",
+		}},
+		{rg.SRVs, "_port1._big-dog._tcp.marathon.mesos.", []string{
+			"big-dog-4dfjd-0.marathon.mesos.:443",
+		}},
+		{rg.SRVs, "_poseidon._tcp.marathon.mesos.", nil},
+		{rg.SRVs, "_leader._tcp.mesos.", []string{"leader.mesos.:5050"}},
+		{rg.SRVs, "_liquor-store._tcp.marathon.mesos.", []string{
+			"liquor-store-4dfjd-0.marathon.mesos.:80",
+			"liquor-store-4dfjd-0.marathon.mesos.:443",
+			"liquor-store-zasmd-1.marathon.mesos.:80",
+			"liquor-store-zasmd-1.marathon.mesos.:443",
+		}},
+		{rg.SRVs, "_liquor-store._udp.marathon.mesos.", nil},
+		{rg.SRVs, "_liquor-store.marathon.mesos.", nil},
+		{rg.SRVs, "_https._liquor-store._tcp.marathon.mesos.", []string{
+			"liquor-store-4dfjd-0.marathon.mesos.:443",
+			"liquor-store-zasmd-1.marathon.mesos.:443",
+		}},
+		{rg.SRVs, "_http._liquor-store._tcp.marathon.mesos.", []string{
+			"liquor-store-4dfjd-0.marathon.mesos.:80",
+			"liquor-store-zasmd-1.marathon.mesos.:80",
+		}},
+		{rg.SRVs, "_port0._liquor-store._tcp.marathon.mesos.", []string{
+			"liquor-store-4dfjd-0.marathon.mesos.:80",
+			"liquor-store-zasmd-1.marathon.mesos.:80",
+		}},
+		{rg.SRVs, "_port1._liquor-store._tcp.marathon.mesos.", []string{
+			"liquor-store-4dfjd-0.marathon.mesos.:443",
+			"liquor-store-zasmd-1.marathon.mesos.:443",
+		}},
+		{rg.SRVs, "_car-store._tcp.marathon.mesos.", []string{
+			"car-store-zinaz-0.marathon.slave.mesos.:31364",
+			"car-store-zinaz-0.marathon.slave.mesos.:31365",
+		}},
+		{rg.SRVs, "_car-store._udp.marathon.mesos.", []string{
+			"car-store-zinaz-0.marathon.slave.mesos.:31364",
+			"car-store-zinaz-0.marathon.slave.mesos.:31365",
+		}},
+		{rg.SRVs, "_port0._car-store._tcp.marathon.mesos.", []string{
+			"car-store-zinaz-0.marathon.slave.mesos.:31364",
+			"car-store-zinaz-0.marathon.slave.mesos.:31364",
+		}},
+		{rg.SRVs, "_port1._car-store._tcp.marathon.mesos.", []string{
+			"car-store-zinaz-0.marathon.slave.mesos.:31365",
+			"car-store-zinaz-0.marathon.slave.mesos.:31365",
+		}},
+		{rg.SRVs, "_port0._car-store._udp.marathon.mesos.", []string{
+			"car-store-zinaz-0.marathon.slave.mesos.:31364",
+			"car-store-zinaz-0.marathon.slave.mesos.:31364",
+		}},
+		{rg.SRVs, "_port1._car-store._udp.marathon.mesos.", []string{
+			"car-store-zinaz-0.marathon.slave.mesos.:31365",
 			"car-store-zinaz-0.marathon.slave.mesos.:31365",
 		}},
 		{rg.SRVs, "_slave._tcp.mesos.", []string{"slave.mesos.:5051"}},

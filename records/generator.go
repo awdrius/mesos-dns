@@ -588,7 +588,8 @@ func (rg *RecordGenerator) taskContextRecord(ctx context, task state.Task, f sta
 
 		if rg.numberPorts {
 			recordName(withProtocol(protocolNone, fname, spec,
-				withNumberedPort(index, spec, asSRV(slaveTarget))))
+				withSubdomains(subdomains,
+					withNumberedPort(index, spec, asSRV(slaveTarget)))))
 		}
 	}
 
@@ -596,11 +597,16 @@ func (rg *RecordGenerator) taskContextRecord(ctx context, task state.Task, f sta
 		return
 	}
 
-	for _, port := range task.DiscoveryInfo.Ports.DiscoveryPorts {
+	for index, port := range task.DiscoveryInfo.Ports.DiscoveryPorts {
 		target := canonical + tail + ":" + strconv.Itoa(port.Number)
 
 		recordName(withProtocol(port.Protocol, fname, spec,
 			withNamedPort(port.Name, spec, asSRV(target))))
+
+		if rg.numberPorts {
+			recordName(withProtocol(port.Protocol, fname, spec,
+				withNumberedPort(index, spec, asSRV(target))))
+		}
 	}
 }
 
