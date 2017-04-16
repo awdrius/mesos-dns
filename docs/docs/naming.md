@@ -4,7 +4,7 @@ title: Service Naming
 
 # Service Naming
 
-Mesos-DNS defines a DNS domain for Mesos tasks (default `.mesos`, see [instructions on configuration](configuration-parameters.html)). Running tasks can be discovered by looking up A and, optionally, SRV records within the Mesos domain. 
+Mesos-DNS defines a DNS domain for Mesos tasks (default `.mesos`, see [instructions on configuration](configuration-parameters.html)). Running tasks can be discovered by looking up A and, optionally, SRV records within the Mesos domain.
 
 ## A Records
 
@@ -64,11 +64,12 @@ For example, a query of the A records for `search.marathon.slave.mesos` would yi
 - `MesosContainerizer.NetworkSettings.IPAddress`.
 
 In general support for these will not be available before Mesos 0.24.
- 
+
 ## SRV Records
 
 An SRV record associates a service name to a hostname and an IP port.
 For task `task` launched by framework `framework`, Mesos-DNS generates an SRV record for service name `_task._protocol.framework.domain`, where `protocol` is `udp` or `tcp`.
+In case `NumberPorts` configuration parameter is set to `true`, service names will also be prefixed with `_port{port index}`, e.g. `_port0._task._protocol.framework.domain`. It is useful when service exposes more than one port and each port has a specific role. It is also an alternative to named ports for mesos schedulers that do not support it.
 For example, other Mesos tasks can discover service `search` launched by the `marathon` framework with a lookup for lookup `_search._tcp.marathon.mesos`:
 
 ```console
@@ -85,7 +86,7 @@ $ dig _search._tcp.marathon.mesos SRV
 
 ;; ANSWER SECTION:
 _search._tcp.marathon.mesos.	60 IN SRV 0 0 31302 10.254.132.41.
-``` 
+```
 
 Mesos-DNS supports the use of a task's DiscoveryInfo for SRV record generation.
 If no DiscoveryInfo is available then Mesos-DNS will fall back to those "ports" resources allocated for the task.
@@ -109,19 +110,16 @@ Mesos-DNS generates a few special records:
 
 Note that, if you configure Mesos-DNS to detect the leading master through Zookeeper, then this is the only master it knows about.
 If you configure Mesos-DNS using the `masters` field, it will generate master records for every master in the list.
-Also note that there is inherent delay between the election of a new master and the update of leader/master records in Mesos-DNS. 
+Also note that there is inherent delay between the election of a new master and the update of leader/master records in Mesos-DNS.
 
 Mesos-DNS generates A records for itself that list all the IP addresses that Mesos-DNS is listening to. The name for Mesos-DNS can be selected using the `SOAMname` [configuration parameter](configuration-parameters.html). The default name is `ns1.mesos`.
 
-In addition to A and SRV records for Mesos tasks, Mesos-DNS supports requests for SOA and NS records for the Mesos domain. DNS requests for records of other types in the Mesos domain will return `NXDOMAIN`. Mesos-DNS does not support PTR records needed for reverse lookups. 
+In addition to A and SRV records for Mesos tasks, Mesos-DNS supports requests for SOA and NS records for the Mesos domain. DNS requests for records of other types in the Mesos domain will return `NXDOMAIN`. Mesos-DNS does not support PTR records needed for reverse lookups.
 
 ## Notes
 
-If a framework launches multiple tasks with the same name, the DNS lookup will return multiple records, one per task. Mesos-DNS randomly shuffles the order of records to provide rudimentary load balancing between these tasks. 
+If a framework launches multiple tasks with the same name, the DNS lookup will return multiple records, one per task. Mesos-DNS randomly shuffles the order of records to provide rudimentary load balancing between these tasks.
 
-Mesos-DNS follows [RFC 952](https://tools.ietf.org/html/rfc952) for name formatting. All fields used to construct hostnames for A records and service names for SRV records must be up to 24 characters and drawn from the alphabet (A-Z), digits (0-9) and minus sign (-). No distinction is made between upper and lower case. If the task name does not comply with these constraints, Mesos-DNS will trim it, remove all invalid characters, and replace period (.) with sign (-) for task names. For framework names, we allow period (.) but all other constraints apply.  For example, a task named `apiserver.myservice` launch by framework `marathon.prod`, will have A records associated with the name `apiserver-myservice.marathon.prod.mesos` and SRV records associated with name `_apiserver-myservice._tcp.marathon.prod.mesos`. 
+Mesos-DNS follows [RFC 952](https://tools.ietf.org/html/rfc952) for name formatting. All fields used to construct hostnames for A records and service names for SRV records must be up to 24 characters and drawn from the alphabet (A-Z), digits (0-9) and minus sign (-). No distinction is made between upper and lower case. If the task name does not comply with these constraints, Mesos-DNS will trim it, remove all invalid characters, and replace period (.) with sign (-) for task names. For framework names, we allow period (.) but all other constraints apply.  For example, a task named `apiserver.myservice` launch by framework `marathon.prod`, will have A records associated with the name `apiserver-myservice.marathon.prod.mesos` and SRV records associated with name `_apiserver-myservice._tcp.marathon.prod.mesos`.
 
 Some frameworks register with longer, less friendly names. For example, earlier versions of marathon may register with names like `marathon-0.7.5`, which will lead to names like `search.marathon-0.7.5.mesos`. Make sure your framework registers with the desired name. For instance, you can launch marathon with ` --framework_name marathon` to get the framework registered as `marathon`.  
-
-
-
