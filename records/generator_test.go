@@ -322,6 +322,9 @@ func TestInsertStateNumPorts(t *testing.T) {
 		{rg.As, "leader.mesos.", []string{"144.76.157.37"}},
 		{rg.As, "slave.mesos.", []string{"1.2.3.10", "1.2.3.11", "1.2.3.12"}},
 		{rg.As, "some-box.chronoswithaspaceandmixe.mesos.", []string{"1.2.3.11"}}, // ensure we translate the framework name as well
+		{rg.SRVs, "_port0._some-box._tcp.chronoswithaspaceandmixe.mesos.", []string{
+			"some-box-h3dyr-0.chronoswithaspaceandmixe.slave.mesos.:31354",
+		}},
 		{rg.As, "marathon.mesos.", []string{"1.2.3.11"}},
 		{rg.SRVs, "_big-dog._tcp.marathon.mesos.", []string{
 			"big-dog-4dfjd-0.marathon.mesos.:80",
